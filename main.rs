@@ -1,6 +1,7 @@
 use std::env;
 use std::f32::consts::PI;
 use std::process;
+use std::vec::Vec;
 
 static SUPPORTED_SAMPLE_RATES: [u32; 3] = [
     16_000, // 16 kHz is commonly used for speech and telephony applications
@@ -43,6 +44,43 @@ impl SampleWidth {
     }
 }
 
+#[derive(Debug)]
+struct WavHeader {
+    riff: [u8; 4],
+    bytes_to_end: u32,
+    wave_txt: [u8; 4],
+    fmt_txt: [u8; 4],
+    format_size: u32,   // 16 byte format specifier
+    format: u16,        // Windows PCM
+    channels: u16,      // 2 channels
+    sample_rate: u32,   // 44,100 Samples/sec
+    avg_byte_rate: u32, // 176,400 Bytes/sec
+    sample_bytes: u16,  // 4 bytes/sample
+    channel_bits: u16,  // 16 bits/channel
+    data_txt: [u8; 4],
+    block_size: u32,
+}
+
+impl WavHeader {
+    pub fn new() -> Self {
+        Self {
+            riff: *b"RIFF",
+            bytes_to_end: 0,
+            wave_txt: *b"WAVE",
+            fmt_txt: *b"fmt ",
+            format_size: 16,
+            format: 0x0001, //WINDOWS PCM
+            channels: 2,
+            sample_rate: 44_100,
+            avg_byte_rate: 176_400,
+            sample_bytes: 2,
+            channel_bits: 16,
+            data_txt: *b"data",
+            block_size: 0,
+        }
+    }
+}
+
 // Get the maximum absolute value for a given sample width.
 // Digital Audio Representation:
 /*
@@ -79,6 +117,7 @@ enum OutputFormat {
     RustArray,
     RawBytes,
     Info,
+    WavFile,
 }
 
 impl OutputFormat {
@@ -89,12 +128,13 @@ impl OutputFormat {
             "rustarray" | "rust" => Some(OutputFormat::RustArray),
             "raw" | "bytes" => Some(OutputFormat::RawBytes),
             "info" => Some(OutputFormat::Info),
+            "wav" => Some(OutputFormat::WavFile),
             _ => None,
         }
     }
 }
 
-fn print_usage() {    
+fn print_usage() {
     println!("Usage: singen [OPTIONS]");
     println!();
     println!("Options:");
@@ -109,6 +149,7 @@ fn print_usage() {
     println!("                           carray   - C-style array declaration");
     println!("                           rustarray - Rust array declaration");
     println!("                           raw      - Raw binary bytes (stdout)");
+    println!("                           wav      - Windows audio file format (stdout)");
     println!("                           info     - Only show buffer info, no data");
     println!("  -a, --analyze            Analyze only (don't generate data)");
     println!("  -h, --help               Show this help message");
@@ -287,7 +328,7 @@ fn print_buffer_info(config: &Config, total_samples: usize, total_bytes: usize) 
     println!(
         "  Full cycles:  {:.2}",
         total_samples as f32 / period_samples
-    );        
+    );
 }
 
 fn print_buffer_hex(buffer: &[u8], bytes_per_line: usize) {
@@ -393,6 +434,29 @@ fn print_raw_bytes(buffer: &[u8]) {
     handle.write_all(buffer).unwrap();
 }
 
+fn print_wav_bytes(buffer: &[u8], sample_rate: u32, channels: u16, sample_width: SampleWidth) {
+    let mut wav_hdr = WavHeader::new();
+    wav_hdr.sample_rate = sample_rate;
+    wav_hdr.block_size = buffer.len() as u32;
+    wav_hdr.channels = channels;
+    wav_hdr.channel_bits = sample_width as u16 * 8;
+
+    let ch_buff_len = buffer.len() / 2;
+    let mut index: usize = 0;
+    let mut l_buf = Vec::with_capacity(ch_buff_len);
+    let mut r_buf = Vec::with_capacity(ch_buff_len);
+
+    while index < buffer.len() {
+        for n in 0..sample_width as usize {
+            l_buf.push(buffer[n + index]);
+            r_buf.push(buffer[index + n + sample_width as usize]);
+        }
+        index += sample_width as usize * 2;
+    }
+
+    // print!("{}",wav_hdr);
+}
+
 fn main() {
     let config = parse_args();
 
@@ -425,6 +489,14 @@ fn main() {
         }
         OutputFormat::RawBytes => {
             print_raw_bytes(&buffer);
+        }
+        OutputFormat::WavFile => {
+            print_wav_bytes(
+                &buffer,
+                config.sample_rate,
+                config.channels as u16,
+                config.sample_width,
+            );
         }
     }
 }
