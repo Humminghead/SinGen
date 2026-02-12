@@ -1,5 +1,7 @@
 use std::env;
 use std::f32::consts::PI;
+use std::fs;
+use std::io::Write;
 use std::process;
 use std::vec::Vec;
 
@@ -44,6 +46,8 @@ impl SampleWidth {
     }
 }
 
+// https://ccrma.stanford.edu/courses/422-winter-2014/projects/WaveFormat/
+#[repr(C, packed)]
 #[derive(Debug)]
 struct WavHeader {
     riff: [u8; 4],
@@ -85,11 +89,11 @@ impl WavHeader {
 // Digital Audio Representation:
 /*
 |----------|-----------------------------|------------------|
-|  Format  |   Integer Type             |   Max Positive   |
+|  Format  |   Integer Type              |   Max Positive   |
 |----------|-----------------------------|------------------|
-|  16-bit  |  int16_t                   |        32767     |
-|  24-bit  |  int32_t (in 24 bits)      |     8,388,607    |
-|  32-bit  |  int32_t                   |  2,147,483,647   |
+|  16-bit  |  int16_t                    |        32767     |
+|  24-bit  |  int32_t (in 24 bits)       |     8,388,607    |
+|  32-bit  |  int32_t                    |  2,147,483,647   |
 |----------|-----------------------------|------------------|
 */
 fn get_range(sample_width: SampleWidth) -> f32 {
@@ -434,27 +438,52 @@ fn print_raw_bytes(buffer: &[u8]) {
     handle.write_all(buffer).unwrap();
 }
 
-fn print_wav_bytes(buffer: &[u8], sample_rate: u32, channels: u16, sample_width: SampleWidth) {
+fn create_wav_file_array(
+    buffer: &[u8],
+    sample_rate: u32,
+    channels: u16,
+    sample_width: SampleWidth,
+) -> Vec<u8> {
     let mut wav_hdr = WavHeader::new();
     wav_hdr.sample_rate = sample_rate;
     wav_hdr.block_size = buffer.len() as u32;
     wav_hdr.channels = channels;
     wav_hdr.channel_bits = sample_width as u16 * 8;
+    wav_hdr.bytes_to_end = (buffer.len() + std::mem::size_of::<WavHeader>()) as u32;
 
-    let ch_buff_len = buffer.len() / 2;
+    let wav_header_len = std::mem::size_of::<WavHeader>();
+    let buffer_len = buffer.len();
+
+    let any_ch_buf_len = buffer.len() / 2;
     let mut index: usize = 0;
-    let mut l_buf = Vec::with_capacity(ch_buff_len);
-    let mut r_buf = Vec::with_capacity(ch_buff_len);
+    let mut l_ch_buf = Vec::with_capacity(any_ch_buf_len);
+    let mut r_ch_buf = Vec::with_capacity(any_ch_buf_len);
 
-    while index < buffer.len() {
+    while index < buffer_len {
         for n in 0..sample_width as usize {
-            l_buf.push(buffer[n + index]);
-            r_buf.push(buffer[index + n + sample_width as usize]);
+            l_ch_buf.push(buffer[n + index]);
+            r_ch_buf.push(buffer[index + n + sample_width as usize]);
         }
         index += sample_width as usize * 2;
     }
 
-    // print!("{}",wav_hdr);
+    
+    let mut file = Vec::with_capacity(wav_header_len + buffer_len);
+    let ptr = &wav_hdr as *const WavHeader as *const u8;
+    file.write_all(unsafe { std::slice::from_raw_parts(ptr, wav_header_len) })
+        .unwrap();
+
+    file.write_all(unsafe {
+        std::slice::from_raw_parts(&r_ch_buf[0] as *const u8, r_ch_buf.len())
+    })
+    .unwrap();
+
+    file.write_all(unsafe {
+        std::slice::from_raw_parts(&l_ch_buf[0] as *const u8, l_ch_buf.len())
+    })
+    .unwrap();
+
+    file
 }
 
 fn main() {
@@ -491,12 +520,17 @@ fn main() {
             print_raw_bytes(&buffer);
         }
         OutputFormat::WavFile => {
-            print_wav_bytes(
+            let file = create_wav_file_array(
                 &buffer,
                 config.sample_rate,
                 config.channels as u16,
                 config.sample_width,
             );
+            let path = format!(
+                "/tmp/file_{}Hz_{}_ms.wav",
+                config.frequency, config.duration_ms
+            );
+            let _ = fs::write(path, file);
         }
     }
 }
