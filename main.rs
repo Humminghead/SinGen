@@ -274,7 +274,7 @@ fn create_sine_array(
 ) -> (Vec<u8>, usize, usize) {
     // Calculate the phase increment for each sample and the total number of samples needed for the specified duration
     let mut phase: f32 = 0.0;
-    let phase_inc: f32 = freq / sample_rate * 2.0 * PI; // Radians per sample
+    let phase_inc: f32 = ((2.0 * PI) * freq) / sample_rate; // Radians per sample
     let total_samples: usize = ((duration_ms * sample_rate) / 1000.0).round() as usize; // Number of samples in the specified duration
 
     // If USB packet mode, adjust to fit 64-byte packets
