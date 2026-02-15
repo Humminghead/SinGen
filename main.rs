@@ -50,37 +50,37 @@ impl SampleWidth {
 #[repr(C, packed)]
 #[derive(Debug)]
 struct WavHeader {
-    riff: [u8; 4],
-    bytes_to_end: u32,
-    wave_txt: [u8; 4],
-    fmt_txt: [u8; 4],
-    format_size: u32,   // 16 byte format specifier
-    format: u16,        // Windows PCM
-    channels: u16,      // 2 channels
-    sample_rate: u32,   // 44,100 Samples/sec
-    avg_byte_rate: u32, // 176,400 Bytes/sec
-    sample_bytes: u16,  // 4 bytes/sample
-    channel_bits: u16,  // 16 bits/channel
-    data_txt: [u8; 4],
-    block_size: u32,
+    chunk_id: [u8; 4],      // 0
+    chunk_size: u32,        //4
+    format: [u8; 4],        //8
+    subchunk_1_id: [u8; 4], //12
+    subchunk_1_size: u32,   // 16
+    audio_format: u16,      // 20
+    num_channels: u16,      // 22
+    sample_rate: u32,       // 24
+    byte_rate: u32,         // 28
+    block_align: u16,       // 32
+    bits_per_sample: u16,   // 34
+    subchunk_2_id: [u8; 4], //36
+    subchunk_2_size: u32,   //40
 }
 
 impl WavHeader {
     pub fn new() -> Self {
         Self {
-            riff: *b"RIFF",
-            bytes_to_end: 0,
-            wave_txt: *b"WAVE",
-            fmt_txt: *b"fmt ",
-            format_size: 16,
-            format: 0x0001, //WINDOWS PCM
-            channels: 2,
+            chunk_id: *b"RIFF",
+            chunk_size: 0,
+            format: *b"WAVE",
+            subchunk_1_id: *b"fmt ",
+            subchunk_1_size: 16,
+            audio_format: 0x0001, //WINDOWS PCM
+            num_channels: 1,
             sample_rate: 44_100,
-            avg_byte_rate: 176_400,
-            sample_bytes: 2,
-            channel_bits: 16,
-            data_txt: *b"data",
-            block_size: 0,
+            byte_rate: 176_400,
+            block_align: 2,
+            bits_per_sample: 16,
+            subchunk_2_id: *b"data",
+            subchunk_2_size: 0,
         }
     }
 }
@@ -264,81 +264,47 @@ fn parse_args() -> Config {
     config
 }
 
-/*
-// Create a sine wave audio buffer for a given frequency, sample rate, channel count, and sample width.
-fn create_sine_array(
-    freq: f32,
-    sample_rate: f32,
-    channel_count: u8,
-    sample_width: SampleWidth,
-    duration_ms: f32,
-) -> (Vec<u8>, usize, usize) {
-    // Calculate the phase increment for each sample and the total number of samples needed for the specified duration
-    // let mut phase: f32 = 0.0;
-    // let phase_inc: f32 = (TAU * freq / 2.0) / sample_rate; // Radians per sample
-    let total_samples: usize = ((duration_ms * sample_rate) / 1000.0).round() as usize; // Number of samples in the specified duration
+/// Generate a linear chirp from `f0` Hz to `f1` Hz over `duration_secs`.
+/// Returns a vector of floating‑point samples in the range [-1.0, 1.0].
+fn generate_linear_chirp(
+    f0: f32,            // start frequency (Hz)
+    f1: f32,            // end frequency (Hz)
+    sample_rate: f32,   // samples per second
+    duration_secs: f32, // total duration in seconds
+) -> Vec<f32> {
+    let dt = 1.0 / sample_rate;
+    let num_samples = (duration_secs * sample_rate).round() as usize;
+    let mut samples = Vec::with_capacity(num_samples);
+    let mut phase = 0.0;
 
-    // If USB packet mode, adjust to fit 64-byte packets
-    let bytes_per_sample = sample_width as usize;
-    let bytes_per_frame = bytes_per_sample * channel_count as usize;
-    let total_bytes = total_samples * bytes_per_frame;
-
-    // Pre-allocate buffer with the total number of bytes needed for the sine wave
-    let mut buffer = Vec::with_capacity(total_bytes);
-    let max_value = get_range(sample_width);
-
-    let generator = SineGenerator;
-
-    // Fill buffer with sine wave
-    for i in 0..total_samples {
-        let time_sec = i as f32 / sample_rate;
-        let sample = (generator.generate(freq, time_sec)) * max_value;
-        let bytes = sample.to_le_bytes();
-
-        for _ in 0..channel_count {
-            for n in 0..sample_width as usize {
-                buffer.push(bytes[n]);
-            }
-        }
-
-        // Keep phase reset when it exceeds 2PI to prevent discontinuities at the reset point
-        // phase = (phase + phase_inc) % TAU;
+    for i in 0..num_samples {
+        let t = i as f32 * dt;
+        // Instantaneous frequency at time t (linear interpolation)
+        let freq = f0 + (f1 - f0) * (t / duration_secs);
+        // Phase increment for this sample
+        phase += TAU * freq * dt;
+        // Keep phase in [-π, π] range to avoid floating-point drift (optional)
+        phase = phase.rem_euclid(TAU);
+        samples.push(phase.sin());
     }
 
-    (buffer, total_samples, total_bytes)
+    samples
 }
-    */
 
-fn create_sine_array(
-    freq: f32,
-    sample_rate: f32,
-    channel_count: u8,
-    sample_width: SampleWidth,
-    duration_ms: f32,
-) -> (Vec<u8>, usize, usize) {
-    let generator = SineGenerator;
-    let total_samples = ((duration_ms * sample_rate) / 1000.0).round() as usize;
-    let bytes_per_sample = sample_width as usize;
-    let bytes_per_frame = bytes_per_sample * channel_count as usize;
-    let total_bytes = total_samples * bytes_per_frame;
-    let max_value = get_range(sample_width);
+fn float_samples_to_bytes(samples: &[f32], channels: u8, sample_width: SampleWidth) -> Vec<u8> {
+    let max_val = get_range(sample_width);
+    let mut buffer = Vec::with_capacity(samples.len() * channels as usize * sample_width as usize);
 
-    let mut buffer = Vec::with_capacity(total_bytes);
-
-    for i in 0..total_samples {
-        let time_seconds = i as f32 / sample_rate;
-        let sample_value = generator.generate(freq, time_seconds);
-        let scaled_sample = (sample_value * max_value) as i32;
-        let bytes = scaled_sample.to_le_bytes();
-
-        for _ in 0..channel_count {
-            for n in 0..sample_width as usize {
-                buffer.push(bytes[n]);
+    for &sample in samples {
+        let scaled = (sample * max_val).round() as i32;
+        let bytes = scaled.to_le_bytes();
+        for _ in 0..channels {
+            for b in &bytes[0..sample_width as usize] {
+                buffer.push(*b);
             }
         }
     }
-
-    (buffer, total_samples, total_bytes)
+    buffer
 }
 
 fn print_buffer_info(config: &Config, total_samples: usize, total_bytes: usize) {
@@ -475,75 +441,47 @@ fn print_raw_bytes(buffer: &[u8]) {
     handle.write_all(buffer).unwrap();
 }
 
-trait ToneGenerator {
-    fn generate(&self, frequency_hz: f32, time_sec: f32) -> f32;
-}
-
-struct SineGenerator;
-
-impl ToneGenerator for SineGenerator {
-    fn generate(&self, frequency_hz: f32, time_sec: f32) -> f32 {
-        (TAU * frequency_hz * time_sec).sin()
-    }
-}
-
 fn create_wav_file_array(
     buffer: &[u8],
     sample_rate: u32,
     channels: u16,
     sample_width: SampleWidth,
 ) -> Vec<u8> {
-    let mut wav_hdr = WavHeader::new();
-    wav_hdr.sample_rate = sample_rate;
-    wav_hdr.block_size = buffer.len() as u32;
-    wav_hdr.channels = channels;
-    wav_hdr.channel_bits = sample_width as u16 * 8;
-    wav_hdr.bytes_to_end = (buffer.len() + std::mem::size_of::<WavHeader>()) as u32;
-
     let wav_header_len = std::mem::size_of::<WavHeader>();
     let buffer_len = buffer.len();
 
-    let any_ch_buf_len = buffer.len() / 2;
-    let mut index: usize = 0;
-    let mut l_ch_buf = Vec::with_capacity(any_ch_buf_len);
-    let mut r_ch_buf = Vec::with_capacity(any_ch_buf_len);
-
-    while index < buffer_len {
-        for n in 0..sample_width as usize {
-            l_ch_buf.push(buffer[n + index]);
-            r_ch_buf.push(buffer[index + n + sample_width as usize]);
-        }
-        index += sample_width as usize * 2;
-    }
+    let mut wav_hdr = WavHeader::new();
+    wav_hdr.chunk_size = (36 + buffer_len) as u32; // 4 + (24) + 8 + buffer_len
+    wav_hdr.num_channels = channels;
+    wav_hdr.sample_rate = sample_rate;
+    wav_hdr.byte_rate = sample_rate as u32 * channels as u32 * sample_width as u32;
+    wav_hdr.block_align = channels * sample_width as u16; // fixed formula
+    wav_hdr.bits_per_sample = sample_width as u16 * 8;
+    wav_hdr.subchunk_2_size = buffer_len as u32;
 
     let mut file = Vec::with_capacity(wav_header_len + buffer_len);
     let ptr = &wav_hdr as *const WavHeader as *const u8;
+    // SAFETY: WavHeader is repr(C, packed) so it has no padding.
     file.write_all(unsafe { std::slice::from_raw_parts(ptr, wav_header_len) })
         .unwrap();
-
-    file.write_all(unsafe {
-        std::slice::from_raw_parts(&r_ch_buf[0] as *const u8, r_ch_buf.len())
-    })
-    .unwrap();
-
-    file.write_all(unsafe {
-        std::slice::from_raw_parts(&l_ch_buf[0] as *const u8, l_ch_buf.len())
-    })
-    .unwrap();
-
+    file.write_all(buffer).unwrap();
     file
 }
 
 fn main() {
     let config = parse_args();
 
-    let (buffer, total_samples, total_bytes) = create_sine_array(
+    let total_samples =
+        ((config.duration_ms * config.sample_rate as f32) / 1000.0).round() as usize;
+    let total_bytes = total_samples * (config.sample_width as u8 * config.channels) as usize;
+
+    let float_samples = generate_linear_chirp(
+        config.frequency,
         config.frequency,
         config.sample_rate as f32,
-        config.channels,
-        config.sample_width,
-        config.duration_ms,
+        config.duration_ms / 1000.0,
     );
+    let buffer = float_samples_to_bytes(&float_samples, config.channels, config.sample_width);
 
     match config.output_format {
         OutputFormat::Info => {
@@ -576,8 +514,8 @@ fn main() {
             );
             // print_raw_bytes(file.as_ref());
             let path = format!(
-                "/tmp/file_{}Hz_{}_ms.wav",
-                config.frequency, config.duration_ms
+                "/tmp/file_{}Hz_{}_ms_{}.wav",
+                config.frequency, config.duration_ms, config.sample_rate
             );
             let _ = fs::write(path, file);
         }
