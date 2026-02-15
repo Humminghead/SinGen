@@ -1,6 +1,5 @@
 use std::env;
-use std::f32::consts::PI;
-use std::fs;
+use std::f32::consts::TAU;
 use std::io::Write;
 use std::process;
 use std::vec::Vec;
@@ -48,7 +47,6 @@ impl SampleWidth {
 
 // https://ccrma.stanford.edu/courses/422-winter-2014/projects/WaveFormat/
 #[repr(C, packed)]
-#[derive(Debug)]
 struct WavHeader {
     chunk_id: [u8; 4],      // 0
     chunk_size: u32,        //4
@@ -512,11 +510,7 @@ fn main() {
                 config.channels as u16,
                 config.sample_width,
             );
-            let path = format!(
-                "/tmp/file_{}Hz_{}_ms_{}.wav",
-                config.frequency, config.duration_ms, config.sample_rate
-            );
-            let _ = fs::write(path, file);
+            print_raw_bytes(file.as_ref());
         }
     }
 }
