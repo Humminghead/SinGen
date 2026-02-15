@@ -1,3 +1,5 @@
+[![Sine wave array generator](/docs/images/logo.png)](https://github.com/Humminghead/SinGen)
+
 # Sine Wave Array Generator
 
 A command-line tool to generate sine wave audio buffers.
