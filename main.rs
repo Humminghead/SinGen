@@ -1,5 +1,5 @@
 use std::env;
-use std::f32::consts::PI;
+use std::f32::consts::TAU;
 use std::fs;
 use std::io::Write;
 use std::process;
@@ -264,6 +264,7 @@ fn parse_args() -> Config {
     config
 }
 
+/*
 // Create a sine wave audio buffer for a given frequency, sample rate, channel count, and sample width.
 fn create_sine_array(
     freq: f32,
@@ -273,8 +274,8 @@ fn create_sine_array(
     duration_ms: f32,
 ) -> (Vec<u8>, usize, usize) {
     // Calculate the phase increment for each sample and the total number of samples needed for the specified duration
-    let mut phase: f32 = 0.0;
-    let phase_inc: f32 = ((2.0 * PI) * freq) / sample_rate; // Radians per sample
+    // let mut phase: f32 = 0.0;
+    // let phase_inc: f32 = (TAU * freq / 2.0) / sample_rate; // Radians per sample
     let total_samples: usize = ((duration_ms * sample_rate) / 1000.0).round() as usize; // Number of samples in the specified duration
 
     // If USB packet mode, adjust to fit 64-byte packets
@@ -286,9 +287,12 @@ fn create_sine_array(
     let mut buffer = Vec::with_capacity(total_bytes);
     let max_value = get_range(sample_width);
 
+    let generator = SineGenerator;
+
     // Fill buffer with sine wave
-    for _ in 0..total_samples {
-        let sample = (phase.sin() * max_value) as i32;
+    for i in 0..total_samples {
+        let time_sec = i as f32 / sample_rate;
+        let sample = (generator.generate(freq, time_sec)) * max_value;
         let bytes = sample.to_le_bytes();
 
         for _ in 0..channel_count {
@@ -298,7 +302,40 @@ fn create_sine_array(
         }
 
         // Keep phase reset when it exceeds 2PI to prevent discontinuities at the reset point
-        phase = (phase + phase_inc) % (2.0 * PI);
+        // phase = (phase + phase_inc) % TAU;
+    }
+
+    (buffer, total_samples, total_bytes)
+}
+    */
+
+fn create_sine_array(
+    freq: f32,
+    sample_rate: f32,
+    channel_count: u8,
+    sample_width: SampleWidth,
+    duration_ms: f32,
+) -> (Vec<u8>, usize, usize) {
+    let generator = SineGenerator;
+    let total_samples = ((duration_ms * sample_rate) / 1000.0).round() as usize;
+    let bytes_per_sample = sample_width as usize;
+    let bytes_per_frame = bytes_per_sample * channel_count as usize;
+    let total_bytes = total_samples * bytes_per_frame;
+    let max_value = get_range(sample_width);
+
+    let mut buffer = Vec::with_capacity(total_bytes);
+
+    for i in 0..total_samples {
+        let time_seconds = i as f32 / sample_rate;
+        let sample_value = generator.generate(freq, time_seconds);
+        let scaled_sample = (sample_value * max_value) as i32;
+        let bytes = scaled_sample.to_le_bytes();
+
+        for _ in 0..channel_count {
+            for n in 0..sample_width as usize {
+                buffer.push(bytes[n]);
+            }
+        }
     }
 
     (buffer, total_samples, total_bytes)
@@ -438,6 +475,18 @@ fn print_raw_bytes(buffer: &[u8]) {
     handle.write_all(buffer).unwrap();
 }
 
+trait ToneGenerator {
+    fn generate(&self, frequency_hz: f32, time_sec: f32) -> f32;
+}
+
+struct SineGenerator;
+
+impl ToneGenerator for SineGenerator {
+    fn generate(&self, frequency_hz: f32, time_sec: f32) -> f32 {
+        (TAU * frequency_hz * time_sec).sin()
+    }
+}
+
 fn create_wav_file_array(
     buffer: &[u8],
     sample_rate: u32,
@@ -467,7 +516,6 @@ fn create_wav_file_array(
         index += sample_width as usize * 2;
     }
 
-    
     let mut file = Vec::with_capacity(wav_header_len + buffer_len);
     let ptr = &wav_hdr as *const WavHeader as *const u8;
     file.write_all(unsafe { std::slice::from_raw_parts(ptr, wav_header_len) })
@@ -526,6 +574,7 @@ fn main() {
                 config.channels as u16,
                 config.sample_width,
             );
+            // print_raw_bytes(file.as_ref());
             let path = format!(
                 "/tmp/file_{}Hz_{}_ms.wav",
                 config.frequency, config.duration_ms
