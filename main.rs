@@ -47,6 +47,7 @@ impl SampleWidth {
 
 // https://ccrma.stanford.edu/courses/422-winter-2014/projects/WaveFormat/
 #[repr(C, packed)]
+#[allow(dead_code)]
 struct WavHeader {
     chunk_id: [u8; 4],      // 0
     chunk_size: u32,        //4
