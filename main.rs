@@ -1,5 +1,5 @@
 use std::env;
-use std::f32::consts::TAU;
+use std::f32::consts::PI;
 use std::fs;
 use std::io::Write;
 use std::process;
@@ -512,7 +512,6 @@ fn main() {
                 config.channels as u16,
                 config.sample_width,
             );
-            // print_raw_bytes(file.as_ref());
             let path = format!(
                 "/tmp/file_{}Hz_{}_ms_{}.wav",
                 config.frequency, config.duration_ms, config.sample_rate
