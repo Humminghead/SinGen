@@ -8,7 +8,7 @@ A command-line tool to generate sine wave audio buffers.
 - **Bit Depths**: 16-bit, 24-bit, 32-bit audio
 - **Channel Configurations**: Mono (1 channel) or Stereo (2 channels)
 - **Custom Duration**: Generate any length of audio in milliseconds
-- **Multiple Output Formats**: Hex, C arrays, Rust arrays, raw binary
+- **Multiple Output Formats**: Hex, C arrays, Rust arrays, raw binary, Waveform Audio File Format (PCM)
 - **Analysis Mode**: Calculate buffer requirements and efficiency
 
 ## Use Cases
@@ -54,6 +54,11 @@ cargo build --release
 
 # Raw binary output (pipe to file)
 ./sine_generator -r 16000 -d 10 -o raw > sinewave.bin
+
+# Wav output (pipe to file)
+./sine_generator -d 1000 -f 1000 -o wav > sinewave.wav
+
+
 ```
 
 ### Command Line Options
@@ -144,8 +149,6 @@ Duration:       1.0 ms
 Buffer Analysis:
   Samples:      16
   Total bytes:  64
-  USB packets:  1 (64 bytes each)
-  Efficiency:   100.0%
 
 Frequency Analysis:
   Period:       36.36 samples
