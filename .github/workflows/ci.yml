@@ -30,12 +30,31 @@ jobs:
         run: |
           pwd
           if [[ -f "target/release/singen" ]]; then
-            cp target/release/singen .
+            cp -v target/release/singen .
           elif [[ -f "target/release/singen.exe" ]]; then
-            cp target/release/singen .
+            cp -v target/release/singen .
           else
             echo "No binary to copy for this OS."
           fi
+
+      - name: Get Build Info
+        id: build-info
+        shell: bash
+        run: |
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          TARGET=""
+          case "$OS" in
+            linux) TARGET="$ARCH-unknown-linux-gnu" ;;
+            darwin) TARGET="$ARCH-apple-darwin" ;;
+            msys*|cygwin*|mingw*) TARGET="$ARCH-pc-windows-msvc" ;;
+          esac
+          VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          FILENAME="singen-v${VERSION}-${TARGET}"
+          echo "OS=$OS" >> "$GITHUB_ENV"
+          echo "ARCH=$ARCH" >> "$GITHUB_ENV"
+          echo "TARGET=$TARGET" >> "$GITHUB_ENV"
+          echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
 
       - name: Compress tar.gz
         uses: ksm2/archive-action@v1
@@ -49,7 +68,7 @@ jobs:
         with:
           name: "${{ env.FILENAME }}"
           format: "zip"
-          include: "{rapidrecast,rapidrecast.exe,README.md,LICENSE}"
+          include: "{singen,singen.exe,README.md,LICENSE}"
 
       - name: Create or Update Release
         env:
