@@ -1,0 +1,103 @@
+name: Rust CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "master" ]
+    types: [ edited ]
+
+  pull_request:
+    branches: [ "master" ]
+    types: [ opened, synchronize ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  get-info:
+    runs-on: ubuntu-latest
+    outputs:
+      cargo_version: ${{ steps.get-version.outputs.VERSION }}
+      workflow_git_tag: ${{ steps.get-version.outputs.WORKFLOW_GIT_TAG }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Get Version from Cargo.toml        
+        id: get-version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "VERSION=$VERSION"
+          echo "WORKFLOW_GIT_TAG=v$VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "WORKFLOW_GIT_TAG=v$VERSION" >> "$GITHUB_OUTPUT"
+  build:
+    needs: get-info
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-14, windows-latest ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: cargo build --release --verbose
+
+      - name: Copy release binary to root
+        shell: bash
+        run: |
+          pwd
+          if [[ -f "target/release/singen" ]]; then
+            cp -v target/release/singen .
+          elif [[ -f "target/release/singen.exe" ]]; then
+            cp -v target/release/singen .
+          else
+            echo "No binary to copy for this OS."
+          fi
+
+      - name: Get Build Info
+        id: build-info
+        shell: bash
+        run: |
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+          ARCH=$(uname -m)
+          TARGET=""
+          case "$OS" in
+            linux) TARGET="$ARCH-unknown-linux-gnu" ;;
+            darwin) TARGET="$ARCH-apple-darwin" ;;
+            msys*|cygwin*|mingw*) TARGET="$ARCH-pc-windows-msvc" ;;
+          esac
+          VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          FILENAME="singen-v${VERSION}-${TARGET}"
+          echo "OS=$OS" >> "$GITHUB_ENV"
+          echo "ARCH=$ARCH" >> "$GITHUB_ENV"
+          echo "TARGET=$TARGET" >> "$GITHUB_ENV"
+          echo "FILENAME=$FILENAME" >> "$GITHUB_ENV"
+
+      - name: Compress tar.gz
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "tar.gz"
+          include: "{singen,singen.exe,README.md}"
+
+      - name: Compress zip
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "zip"
+          include: "{singen,singen.exe,README.md,LICENSE}"
+
+      - name: Create or Update Release
+        env:
+          VERSION: ${{ needs.get-info.outputs.cargo_version }}
+          WORKFLOW_GIT_TAG: ${{ needs.get-info.outputs.workflow_git_tag}}
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${{ env.FILENAME }}.tar.gz,${{ env.FILENAME }}.zip"
+          allowUpdates: 'true'
+          generateReleaseNotes: 'true'
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag: ${{ env.WORKFLOW_GIT_TAG }}
