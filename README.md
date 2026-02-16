@@ -28,37 +28,37 @@ A command-line tool to generate sine wave audio buffers.
 ```bash
 # Clone and build
 git clone <repository-url>
-cd sine_generator
+cd singen
 cargo build --release
 
-# The binary will be at ./target/release/sine_generator
+# The binary will be at ./target/release/singen
 ```
 ### Basic Examples
 
 ```bash
 # Default settings (440Hz, 16kHz, stereo 16-bit, 1ms)
-./sine_generator
+./singen
 
 # Generate 1kHz sine at 48kHz for 10ms, 24-bit
-./sine_generator -f 1000 -r 48000 -b 24 -d 10
+./singen -f 1000 -r 48000 -b 24 -d 10
 
 # Mono output with C array format
-./sine_generator -c 1 -o carray
+./singen -c 1 -o carray
 
 # Optimize for USB packets (64-byte boundaries)
-./sine_generator -r 32000 -d 1 -p
+./singen -r 32000 -d 1 -p
 
 # Rust array for embedded use
-./sine_generator -r 16000 -d 1 -o rustarray
+./singen -r 16000 -d 1 -o rustarray
 
 # Just show info without generating data
-./sine_generator -a
+./singen -a
 
 # Raw binary output (pipe to file)
-./sine_generator -r 16000 -d 10 -o raw > sinewave.bin
+./singen -r 16000 -d 10 -o raw > sinewave.bin
 
 # Wav output (pipe to file)
-./sine_generator -d 1000 -f 1000 -o wav > sinewave.wav
+./singen -d 1000 -f 1000 -o wav > sinewave.wav
 
 
 ```
@@ -67,7 +67,7 @@ cargo build --release
 
 ```
 Sine Wave Generator for USB Audio Testing
-Usage: sine_generator [OPTIONS]
+Usage: singen [OPTIONS]
 
 Options:
   -f, --frequency FREQ     Sine wave frequency in Hz (default: 440.0)
@@ -87,9 +87,9 @@ Options:
   -h, --help               Show this help message
 
 Examples:
-  sine_generator -f 1000 -r 48000 -b 16 -d 10 -o carray
-  sine_generator --frequency 440 --rate 44100 --channels 1 --bits 24
-  sine_generator -r 16000 -d 1 -o rustarray -p
+  singen -f 1000 -r 48000 -b 16 -d 10 -o carray
+  singen --frequency 440 --rate 44100 --channels 1 --bits 24
+  singen -r 16000 -d 1 -o rustarray -p
 ```
 
 ## Output Formats
@@ -170,7 +170,7 @@ The tool uses high-precision floating-point math to generate sine waves:
 1. Generate a C array:
 
    ```bash
-   ./sine_generator -r 16000 -d 1 -o carray > sine_buffer.h
+   ./singen -r 16000 -d 1 -o carray > sine_buffer.h
    ```
 
 2. Include in your project:
@@ -185,7 +185,7 @@ The tool uses high-precision floating-point math to generate sine waves:
 1. Generate a Rust array:
 
    ```bash
-   ./sine_generator -r 16000 -d 1 -o rustarray > src/sine_buffer.rs
+   ./singen -r 16000 -d 1 -o rustarray > src/sine_buffer.rs
    ```
 
 2. Include in your project:
@@ -200,7 +200,7 @@ The tool uses high-precision floating-point math to generate sine waves:
    ```bash
    # Generate multiple test frequencies
    for freq in 440 1000 2000 4000; do
-     ./sine_generator -f $freq -r 48000 -d 100 -o raw > test_${freq}hz.bin
+     ./singen -f $freq -r 48000 -d 100 -o raw > test_${freq}hz.bin
    done
    ```
 
