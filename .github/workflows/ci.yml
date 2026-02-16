@@ -14,26 +14,13 @@ env:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-13, macos-14, windows-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # provided automatically by GitHub
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with: { name: dist }
-      - id: create_release
-        uses: elgohr/Github-Release-Action@v5
-        with:
-          title: Dev Build ${{ github.sha }}
-          tag: dev-${{ github.sha }}
-          prerelease: true
+      - name: Build
+        run: cargo build --verbose
