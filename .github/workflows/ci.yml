@@ -79,5 +79,5 @@ jobs:
           artifacts: "${{ env.FILENAME }}.tar.gz,${{ env.FILENAME }}.zip"
           allowUpdates: 'true'
           generateReleaseNotes: 'true'
-          token: ${{ secrets.RELEASE_TOKEN }}
+          token: ${{ secrets.RELEASE_TOKEN_PAT }}
           tag: ${{ env.WORKFLOW_GIT_TAG }}
