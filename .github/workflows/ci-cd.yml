@@ -3,6 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ "master" ]
+    types: [ edited ]
 
   pull_request:
     branches: [ "master" ]
