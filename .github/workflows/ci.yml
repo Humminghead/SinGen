@@ -27,8 +27,6 @@ jobs:
       - name: Get Version from Cargo.toml        
         id: get-version
         run: |
-          echo "PATH:$(pwd)"
-          ls -lah
           VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
           echo "WORKFLOW_GIT_TAG=v$VERSION" >> "$GITHUB_OUTPUT"
