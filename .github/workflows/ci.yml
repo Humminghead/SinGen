@@ -13,7 +13,20 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  get-info:
+    runs-on: ubuntu-latest
+    outputs:
+      cargo_version: ${{ steps.get-version.outputs.VERSION }}
+      workflow_git_tag: ${{ steps.get-version.outputs.WORKFLOW_GIT_TAG }}
+    steps:
+      - name: Get Version from Cargo.toml        
+        id: get-version
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | sed -E 's/version = "(.*)"/\1/')
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "WORKFLOW_GIT_TAG=v$VERSION" >> "$GITHUB_OUTPUT"
   build:
+    needs: get-info
     strategy:
       matrix:
         os: [ ubuntu-latest, macos-14, windows-latest ]
@@ -72,8 +85,8 @@ jobs:
 
       - name: Create or Update Release
         env:
-          VERSION: ${{ needs.prepare-release.outputs.rr_cargo_version }}
-          WORKFLOW_GIT_TAG: ${{ needs.prepare-release.outputs.workflow_git_tag}}
+          VERSION: ${{ needs.get-info.outputs.cargo_version }}
+          WORKFLOW_GIT_TAG: ${{ needs.get-info.outputs.workflow_git_tag}}
         uses: ncipollo/release-action@v1
         with:
           artifacts: "${{ env.FILENAME }}.tar.gz,${{ env.FILENAME }}.zip"
