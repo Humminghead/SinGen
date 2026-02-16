@@ -24,3 +24,41 @@ jobs:
 
       - name: Build
         run: cargo build --release --verbose
+
+      - name: Copy release binary to root
+        shell: bash
+        run: |
+          pwd
+          if [[ -f "target/release/singen" ]]; then
+            cp target/release/singen .
+          elif [[ -f "target/release/singen.exe" ]]; then
+            cp target/release/singen .
+          else
+            echo "No binary to copy for this OS."
+          fi
+
+      - name: Compress tar.gz
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "tar.gz"
+          include: "{singen,singen.exe,README.md}"
+
+      - name: Compress zip
+        uses: ksm2/archive-action@v1
+        with:
+          name: "${{ env.FILENAME }}"
+          format: "zip"
+          include: "{rapidrecast,rapidrecast.exe,README.md,LICENSE}"
+
+      - name: Create or Update Release
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.rr_cargo_version }}
+          WORKFLOW_GIT_TAG: ${{ needs.prepare-release.outputs.workflow_git_tag}}
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "${{ env.FILENAME }}.tar.gz,${{ env.FILENAME }}.zip"
+          allowUpdates: 'true'
+          generateReleaseNotes: 'true'
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag: ${{ env.WORKFLOW_GIT_TAG }}
