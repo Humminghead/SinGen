@@ -19,6 +19,11 @@ jobs:
       cargo_version: ${{ steps.get-version.outputs.VERSION }}
       workflow_git_tag: ${{ steps.get-version.outputs.WORKFLOW_GIT_TAG }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
       - name: Get Version from Cargo.toml        
         id: get-version
         run: |
